@@ -145,3 +145,66 @@ func TestTally(t *testing.T) {
 		}
 	}
 }
+
+type AddrTest struct {
+	Input  string
+	Domain string
+	Error  string
+}
+
+var AddrTests = []AddrTest{
+	AddrTest{
+		Input:  "foo@foo.com",
+		Domain: "foo.com",
+	},
+	AddrTest{
+		Input:  "<foo@foo.com>",
+		Domain: "foo.com",
+	},
+	AddrTest{
+		Input: "an invalid address",
+		Error: "mail: missing phrase",
+	},
+	AddrTest{
+		Input: "",
+		Error: "mail: no address",
+	},
+	AddrTest{
+		Input:  `"John Doe" <foo@foo.com>`,
+		Domain: "foo.com",
+	},
+	AddrTest{
+		Input:  `"John Doe@Work" <foo@foo.com>`,
+		Domain: "foo.com",
+	},
+	AddrTest{
+		Input: `@foo.com`,
+		Error: "mail: missing word in phrase: mail: invalid string",
+	},
+	AddrTest{
+		Input: `foo@@foo.com`,
+		Error: "mail: no angle-addr",
+	},
+	AddrTest{
+		Input: `foo@@foo. com`,
+		Error: "mail: no angle-addr",
+	},
+}
+
+func TestExtractDomain(t *testing.T) {
+	for _, test := range AddrTests {
+		result, err := extractDomain(test.Input)
+		if err != nil {
+			if test.Error == "" {
+				t.Errorf("Error extracting domain from `%s`: %s", test.Domain, err)
+			}
+			if test.Error != err.Error() {
+				t.Errorf("Unexpected error extracting domain from `%s`. Expected `%s`, got `%s`",
+					test.Domain, test.Error, err)
+			}
+		}
+		if result != test.Domain {
+			t.Errorf("extractDomain() returned `%s`, expected `%s`", result, test.Domain)
+		}
+	}
+}

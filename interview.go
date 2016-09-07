@@ -93,6 +93,8 @@ func extractDomain(full string) (string, error) {
 	// or escaped @ signs.
 	atIdx := strings.LastIndex(addr.Address, "@")
 	if atIdx == -1 {
+		// This should never actually happen, as mail.ParseAddress() should catch
+		// this as well, but I prefer caution.
 		return "", errors.New("No @ in email address")
 	}
 	return addr.Address[atIdx+1:], nil
