@@ -9,12 +9,11 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"log"
+	"net/mail"
+	"sort"
 	"strings"
 )
-
-// CaseInsensitiveAddresses can be set to true to ignore case in the local
-// part of the email address. See RFC 2821.
-var CaseInsensitiveAddresses bool
 
 // DomainStats represents email address statistics for a given domain name.
 // The domain name is converted to lowercase for consistency (see RFC 4343).
@@ -26,39 +25,77 @@ type DomainStats struct {
 	// Addresses counts the absolute number of addresses found to match the
 	// domain name.
 	Addresses int
-	// UniqueAddresses counts the number of unique addresses found to match the
-	// domain name.
-	UniqueAddresses int
 }
 
-type ignoreCase bool
+// DomainStatsSlice attaches the methods of sort.Interface to []DomainStats,
+// sorting in increasing order.
+type DomainStatsSlice []*DomainStats
 
-// TallyDomainStatsIgnoreCase works exactly as TallyDomainStats, but ignores
-// case for the local portion of the email address.
-func TallyDomainStatsIgnoreCase(r io.Reader) ([]DomainStats, error) {
-	var ic ignoreCase = true
-	return ic.tallyStats(r)
-}
+// Len returns the length of the underlying slice.
+func (s DomainStatsSlice) Len() int { return len(s) }
+
+// Less reports whether the element i should sort before element j in the list.
+func (s DomainStatsSlice) Less(i, j int) bool { return s[i].DomainName < s[j].DomainName }
+
+// Swap swaps the elements i and j.
+func (s DomainStatsSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // TallyDomainStats reads a CSV file from the passed io.Reader, and returns a
-// slice of DomainStats sorted by domain name. Stats are calculated on the
-// domain-sensitive email address, to be compliant with RFC 2821.
-func TallyDomainStats(r io.Reader) ([]DomainStats, error) {
-	var ic ignoreCase = false
-	return ic.tallyStats(r)
-}
-
-func (ic ignoreCase) tallyStats(r io.Reader) ([]DomainStats, error) {
+// slice of DomainStats sorted by domain name.
+func TallyDomainStats(r io.Reader) ([]*DomainStats, error) {
+	stats := make(map[string]*DomainStats)
 	csvReader := csv.NewReader(r)
 	headings, err := csvReader.Read()
 	if err != nil {
 		return nil, err
 	}
-	_, err = findEmailColumn(headings)
+	emailColumn, err := findEmailColumn(headings)
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	counter := 1
+	for {
+		counter++
+		row, err := csvReader.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Printf("[line %d] Error parsing CSV: %s", counter, err)
+			continue
+		}
+		domain, err := extractDomain(row[emailColumn])
+		if err != nil {
+			log.Printf("[line %d] Error parsing email address: %s", counter, err)
+			continue
+		}
+		dc, ok := stats[domain]
+		if !ok {
+			dc = &DomainStats{DomainName: domain}
+			stats[domain] = dc
+		}
+		dc.Addresses++
+	}
+	ds := DomainStatsSlice(make([]*DomainStats, 0, len(stats)))
+	for _, stat := range stats {
+		ds = append(ds, stat)
+	}
+	sort.Sort(ds)
+	return ds, nil
+}
+
+func extractDomain(full string) (string, error) {
+	addr, err := mail.ParseAddress(full)
+	if err != nil {
+		return "", err
+	}
+	// Always look for the last @, because the local part might contain quoted
+	// or escaped @ signs.
+	atIdx := strings.LastIndex(addr.Address, "@")
+	if atIdx == -1 {
+		return "", errors.New("No @ in email address")
+	}
+	return addr.Address[atIdx+1:], nil
 }
 
 func findEmailColumn(headings []string) (int, error) {

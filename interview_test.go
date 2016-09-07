@@ -3,16 +3,10 @@ package jonathan
 import (
 	"os"
 	"testing"
+	// "github.com/davecgh/go-spew/spew"
 )
 
 const CSVFile = "customers.csv"
-
-func TestSort(t *testing.T) {
-	_, err := os.Open(CSVFile)
-	if err != nil {
-		t.Fatalf("Unable to open %s: %s", CSVFile, err)
-	}
-}
 
 type ColumnTest struct {
 	Name     string
@@ -61,6 +55,93 @@ func TestFindEmailColumn(t *testing.T) {
 			}
 		} else if i != test.Expected {
 			t.Fatalf("%s returned %d, not %d", test.Name, i, test.Expected)
+		}
+	}
+}
+
+const ExpectedDomainStats = 500
+const ExpectedAddrCount = 3000
+
+var TopStats = []DomainStats{
+	DomainStats{
+		DomainName: "123-reg.co.uk",
+		Addresses:  8,
+	},
+	DomainStats{
+		DomainName: "163.com",
+		Addresses:  6,
+	},
+	DomainStats{
+		DomainName: "1688.com",
+		Addresses:  3,
+	},
+	DomainStats{
+		DomainName: "1und1.de",
+		Addresses:  5,
+	},
+	DomainStats{
+		DomainName: "360.cn",
+		Addresses:  6,
+	},
+}
+
+var BottomStats = []DomainStats{
+	DomainStats{
+		DomainName: "youku.com",
+		Addresses:  5,
+	},
+	DomainStats{
+		DomainName: "youtu.be",
+		Addresses:  6,
+	},
+	DomainStats{
+		DomainName: "youtube.com",
+		Addresses:  3,
+	},
+	DomainStats{
+		DomainName: "zdnet.com",
+		Addresses:  8,
+	},
+	DomainStats{
+		DomainName: "zimbio.com",
+		Addresses:  3,
+	},
+}
+
+func TestTally(t *testing.T) {
+	file, err := os.Open(CSVFile)
+	if err != nil {
+		t.Fatalf("Unable to open %s: %s", CSVFile, err)
+	}
+	ds, err := TallyDomainStats(file)
+	if err != nil {
+		t.Fatalf("Error tallying stats: %s", err)
+	}
+	if len(ds) != ExpectedDomainStats {
+		t.Errorf("Expected %d stats, got %d", ExpectedDomainStats, len(ds))
+	}
+	var addrCount int
+	for _, s := range ds {
+		addrCount += s.Addresses
+	}
+	if addrCount != ExpectedAddrCount {
+		t.Errorf("Expected %d addresses, got %d", ExpectedAddrCount, addrCount)
+	}
+	for i, s := range TopStats {
+		if ds[i].DomainName != s.DomainName {
+			t.Errorf("Expected domain `%s` in position %d, got `%s`", s.DomainName, i, ds[i].DomainName)
+		}
+		if ds[i].Addresses != s.Addresses {
+			t.Errorf("Expected %d addresses in position %d, got %d", s.Addresses, i, ds[i].Addresses)
+		}
+	}
+	for j, s := range BottomStats {
+		i := len(ds) - len(BottomStats) + j
+		if ds[i].DomainName != s.DomainName {
+			t.Errorf("Expected domain `%s` in position %d, got `%s`", s.DomainName, i, ds[i].DomainName)
+		}
+		if ds[i].Addresses != s.Addresses {
+			t.Errorf("Expected %d addresses in position %d, got %d", s.Addresses, i, ds[i].Addresses)
 		}
 	}
 }
