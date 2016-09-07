@@ -1,10 +1,18 @@
 package jonathan
 
 import (
+	"bytes"
+	"log"
 	"os"
+	"regexp"
 	"testing"
-	// "github.com/davecgh/go-spew/spew"
 )
+
+var buf bytes.Buffer
+
+func init() {
+	log.SetOutput(&buf)
+}
 
 const CSVFile = "customers.csv"
 
@@ -61,6 +69,9 @@ func TestFindEmailColumn(t *testing.T) {
 
 const ExpectedDomainStats = 500
 const ExpectedAddrCount = 3000
+const ExpectedLog = `YYYY/MM/DD hh:mm:ss [line 1002] Error parsing email address: mail: missing phrase
+YYYY/MM/DD hh:mm:ss [line 2003] Error parsing email address: mail: missing phrase
+`
 
 var TopStats = []DomainStats{
 	DomainStats{
@@ -108,6 +119,8 @@ var BottomStats = []DomainStats{
 	},
 }
 
+var logRE = regexp.MustCompile(`(?m)^\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d`)
+
 func TestTally(t *testing.T) {
 	file, err := os.Open(CSVFile)
 	if err != nil {
@@ -116,6 +129,11 @@ func TestTally(t *testing.T) {
 	ds, err := TallyDomainStats(file)
 	if err != nil {
 		t.Fatalf("Error tallying stats: %s", err)
+	}
+
+	if l := logRE.ReplaceAllString(buf.String(), "YYYY/MM/DD hh:mm:ss"); l != ExpectedLog {
+		t.Errorf("Log output different than expected.\nGot:\n%s---\nExpected:\n%s\n---\n",
+			l, ExpectedLog)
 	}
 	if len(ds) != ExpectedDomainStats {
 		t.Errorf("Expected %d stats, got %d", ExpectedDomainStats, len(ds))
@@ -183,10 +201,6 @@ var AddrTests = []AddrTest{
 	},
 	AddrTest{
 		Input: `foo@@foo.com`,
-		Error: "mail: no angle-addr",
-	},
-	AddrTest{
-		Input: `foo@@foo. com`,
 		Error: "mail: no angle-addr",
 	},
 }
